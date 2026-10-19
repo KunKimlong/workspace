@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-savings-goal
+      author: admin-backend
+      comment: Optional amount the user plans to save from that month's salary
+      changes:
+        - addColumn:
+            tableName: monthly_salaries
+            columns:
+              - column:
+                  name: savings_goal
+                  type: decimal(14, 2)
+                  remarks: Planned savings for the month; null = no goal set

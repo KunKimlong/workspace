@@ -1,0 +1,59 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-planned-expenses
+      author: admin-backend
+      comment: Must-pay items for a month (fuel, electricity, water...) set aside from the salary
+      changes:
+        - createTable:
+            tableName: planned_expenses
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_planned_expenses
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_planned_expenses_user
+                    references: app_users(id)
+                    deleteCascade: true
+              - column:
+                  name: plan_month
+                  type: varchar(7)
+                  remarks: Month as yyyy-MM
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: decimal(14, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expense_id
+                  type: bigint
+                  remarks: The expense recorded when it was paid; null = not paid yet
+        - addForeignKeyConstraint:
+            baseTableName: planned_expenses
+            baseColumnNames: expense_id
+            constraintName: fk_planned_expenses_expense
+            referencedTableName: expenses
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            tableName: planned_expenses
+            indexName: idx_planned_expenses_user_month
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: plan_month

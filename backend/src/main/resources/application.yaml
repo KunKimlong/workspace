@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: backend
+  # Load secrets and the default user from backend/.env (KEY=value lines)
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    # File-based H2 database in backend/data/ - survives restarts
+    url: jdbc:h2:file:./data/admindb;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  # Liquibase creates and migrates the schema (see resources/db/changelog)
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  jpa:
+    hibernate:
+      # Hibernate only checks that entities match the Liquibase schema; it never alters tables
+      ddl-auto: validate
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+server:
+  port: ${PORT:1680}
+
+app:
+  cors:
+    # Frontend origins allowed to call the API (with credentials)
+    allowed-origins:
+      - http://localhost:168
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    # Set to true when served over HTTPS
+    cookie-secure: false
+  admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:Administrator}

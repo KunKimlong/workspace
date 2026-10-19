@@ -1,0 +1,91 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-monthly-salaries
+      author: admin-backend
+      comment: A user's salary per calendar month
+      changes:
+        - createTable:
+            tableName: monthly_salaries
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_monthly_salaries
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_monthly_salaries_user
+                    references: app_users(id)
+                    deleteCascade: true
+              - column:
+                  name: salary_month
+                  type: varchar(7)
+                  remarks: Month as yyyy-MM
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: decimal(14, 2)
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: monthly_salaries
+            columnNames: user_id, salary_month
+            constraintName: uk_monthly_salaries_user_month
+
+  - changeSet:
+      id: 003-create-expenses
+      author: admin-backend
+      comment: Money a user spent on a given day, with the reason
+      changes:
+        - createTable:
+            tableName: expenses
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_expenses
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_expenses_user
+                    references: app_users(id)
+                    deleteCascade: true
+              - column:
+                  name: spent_on
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: decimal(14, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: varchar(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: expenses
+            indexName: idx_expenses_user_spent_on
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: spent_on

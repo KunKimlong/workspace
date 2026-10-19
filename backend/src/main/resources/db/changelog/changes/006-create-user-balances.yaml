@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-create-user-balances
+      author: admin-backend
+      comment: The money a user says they have right now; expenses added afterwards are taken off it
+      changes:
+        - createTable:
+            tableName: user_balances
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_user_balances
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_user_balances_user
+                    foreignKeyName: fk_user_balances_user
+                    references: app_users(id)
+                    deleteCascade: true
+              - column:
+                  name: amount
+                  type: decimal(14, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: set_at
+                  type: timestamp with time zone
+                  remarks: When the user entered the amount
+                  constraints:
+                    nullable: false

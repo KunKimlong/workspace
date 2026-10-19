@@ -1,0 +1,21 @@
+# Liquibase entry point. Never edit a changeset that has already been applied -
+# add a new numbered file under changes/ and include it at the end of this list.
+databaseChangeLog:
+  - include:
+      file: changes/001-create-users.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/002-create-refresh-tokens.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/003-create-finance.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/004-add-savings-goal.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-create-planned-expenses.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/006-create-user-balances.yaml
+      relativeToChangelogFile: true
