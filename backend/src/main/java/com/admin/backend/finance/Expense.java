@@ -45,15 +45,23 @@ public class Expense {
     }
 
     public Expense(User user, LocalDate spentOn, BigDecimal amount, String reason) {
+        this(user, spentOn, amount, reason, null);
+    }
+
+    /** {@code createdAt} null means "when it's saved". */
+    public Expense(User user, LocalDate spentOn, BigDecimal amount, String reason, Instant createdAt) {
         this.user = user;
         this.spentOn = spentOn;
         this.amount = amount;
         this.reason = reason;
+        this.createdAt = createdAt;
     }
 
     @PrePersist
     void onCreate() {
-        createdAt = Instant.now();
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
     }
 
     public Long getId() { return id; }

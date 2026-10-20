@@ -128,6 +128,8 @@ export function ExpenseDialog({
                   setForm((f) => ({ ...f, date }))
                   setErrors((x) => ({ ...x, date: "" }))
                 }}
+                // Editing only happens on today's spending, and it can't be moved to a locked past day
+                min={expense ? todayISO() : undefined}
                 max={todayISO()}
                 invalid={!!errors.date}
               />

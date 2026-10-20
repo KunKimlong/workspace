@@ -82,8 +82,8 @@ export function BalanceDialog({
           <DialogHeader>
             <DialogTitle>Current balance</DialogTitle>
             <DialogDescription>
-              How much money you have right now - bank and cash together. Remaining balance adds what&apos;s
-              left of this month&apos;s salary on top.
+              How much money you have right now - bank and cash together. Spending you add after this is taken
+              off it.
             </DialogDescription>
           </DialogHeader>
 

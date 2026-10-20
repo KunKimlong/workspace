@@ -2,6 +2,7 @@ package com.admin.backend.finance;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 import com.admin.backend.user.User;
 
@@ -32,6 +33,14 @@ public class UserBalance {
     @Column(nullable = false)
     private Instant setAt;
 
+    /** Pay plan: when the user expects money next. Null = no plan, budget by calendar month instead. */
+    @Column(name = "next_pay_date")
+    private LocalDate nextPayDate;
+
+    /** Pay plan: money to leave untouched until the next pay. */
+    @Column(name = "keep_amount", precision = 14, scale = 2)
+    private BigDecimal keepAmount;
+
     protected UserBalance() {
     }
 
@@ -44,8 +53,16 @@ public class UserBalance {
     public BigDecimal getAmount() { return amount; }
     public Instant getSetAt() { return setAt; }
 
+    public LocalDate getNextPayDate() { return nextPayDate; }
+    public BigDecimal getKeepAmount() { return keepAmount; }
+
     public void set(BigDecimal amount, Instant setAt) {
         this.amount = amount;
         this.setAt = setAt;
+    }
+
+    public void setPayPlan(LocalDate nextPayDate, BigDecimal keepAmount) {
+        this.nextPayDate = nextPayDate;
+        this.keepAmount = keepAmount;
     }
 }

@@ -7,7 +7,7 @@ import { ExpensesTable, FinancePageHeader, FinancePageSkeleton } from "@/compone
 import { SpecialSpendingCard } from "@/components/finance/special-spending-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatMoney, formatMonth } from "@/lib/format"
+import { formatMonth } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /** Every expense in the month, plus one-off special spending with quick add. */
@@ -43,8 +43,7 @@ export default function FinanceExpensesPage() {
           <CardHeader>
             <CardTitle>All expenses</CardTitle>
             <CardDescription>
-              {summary.expenseCount} expense{summary.expenseCount === 1 ? "" : "s"} ·{" "}
-              {formatMoney(stats.spent)} in {formatMonth(month)}
+              {summary.expenseCount} expense{summary.expenseCount === 1 ? "" : "s"} in {formatMonth(month)}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">

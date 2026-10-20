@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts"
 
+import { MASK, usePrivacy } from "@/components/privacy"
 import {
   Card,
   CardContent,
@@ -29,6 +30,8 @@ import { formatCompactMoney, formatDay, formatMonth, formatMoney } from "@/lib/f
 // Series colors follow the entity: Salary is always --chart-1 (blue), Spent always --chart-2 (orange).
 const config = {
   salary: { label: "Salary", color: "var(--chart-1)" },
+  // Salary-vs-spent bars: the month's salary, or the pay received when no salary was set
+  paid: { label: "Salary / pay", color: "var(--chart-1)" },
   spent: { label: "Spent", color: "var(--chart-2)" },
 } satisfies ChartConfig
 
@@ -53,7 +56,16 @@ function TooltipBox({ title, rows }: { title: string; rows: TooltipRow[] }) {
   )
 }
 
-type DailyRow = FinanceSummary["daily"][number] & { day: number }
+/** Chart axes and tooltips are text, not blurrable elements, so amounts are masked while hidden. */
+function useChartMoney() {
+  const { hidden } = usePrivacy()
+  return {
+    money: (v: number) => (hidden ? MASK : formatMoney(v)),
+    compact: (v: number) => (hidden ? MASK : formatCompactMoney(v)),
+  }
+}
+
+type DailyRow =FinanceSummary["daily"][number] & { day: number }
 
 export function DailySpendingChart({
   daily,
@@ -64,6 +76,7 @@ export function DailySpendingChart({
   dailyBudget: number | null
 }) {
   const rows: DailyRow[] = daily.map((d) => ({ ...d, day: Number(d.date.slice(8)) }))
+  const { money, compact } = useChartMoney()
 
   return (
     <Card className="lg:col-span-3">
@@ -71,7 +84,7 @@ export function DailySpendingChart({
         <CardTitle>Daily spending</CardTitle>
         <CardDescription>
           Total spent each day
-          {dailyBudget != null && <> · dashed line = daily spending budget ({formatMoney(dailyBudget)})</>}
+          {dailyBudget != null && " · dashed line = daily spending budget"}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -83,7 +96,7 @@ export function DailySpendingChart({
               tickLine={false}
               axisLine={false}
               width={64}
-              tickFormatter={(v: number) => formatCompactMoney(v)}
+              tickFormatter={compact}
             />
             <ChartTooltip
               cursor={{ opacity: 0.4 }}
@@ -91,11 +104,11 @@ export function DailySpendingChart({
                 if (!active || !payload?.length) return null
                 const row = payload[0].payload as DailyRow
                 const rowsOut: TooltipRow[] = [
-                  { label: "Spent", value: formatMoney(row.total), color: "var(--color-spent)" },
+                  { label: "Spent", value: money(row.total), color: "var(--color-spent)" },
                   { label: "Expenses", value: String(row.count) },
                 ]
                 if (dailyBudget != null) {
-                  rowsOut.push({ label: "Budget left", value: formatMoney(dailyBudget - row.total) })
+                  rowsOut.push({ label: "Budget left", value: money(dailyBudget - row.total) })
                 }
                 return <TooltipBox title={formatDay(row.date)} rows={rowsOut} />
               }}
@@ -117,10 +130,24 @@ export function DailySpendingChart({
   )
 }
 
-type MonthRow = FinanceSummary["history"][number] & { label: string }
+/**
+ * `paid` is the bar: the month's salary if one was set, else the pay recorded as received - plus any
+ * extra income.
+ */
+type MonthRow = FinanceSummary["history"][number] & { label: string; paid: number | null }
+
+function monthPaid(h: FinanceSummary["history"][number]) {
+  const pay = h.salary ?? h.income
+  return pay + h.extraIncome > 0 ? pay + h.extraIncome : h.salary
+}
 
 export function SalaryVsSpentChart({ history }: { history: FinanceSummary["history"] }) {
-  const rows: MonthRow[] = history.map((h) => ({ ...h, label: formatMonth(h.month, "short") }))
+  const rows: MonthRow[] = history.map((h) => ({
+    ...h,
+    label: formatMonth(h.month, "short"),
+    paid: monthPaid(h),
+  }))
+  const { money, compact } = useChartMoney()
 
   return (
     <Card className="lg:col-span-2">
@@ -137,7 +164,7 @@ export function SalaryVsSpentChart({ history }: { history: FinanceSummary["histo
               tickLine={false}
               axisLine={false}
               width={64}
-              tickFormatter={(v: number) => formatCompactMoney(v)}
+              tickFormatter={compact}
             />
             <ChartTooltip
               cursor={{ opacity: 0.4 }}
@@ -146,23 +173,26 @@ export function SalaryVsSpentChart({ history }: { history: FinanceSummary["histo
                 const row = payload[0].payload as MonthRow
                 const rowsOut: TooltipRow[] = [
                   {
-                    label: "Salary",
-                    value: row.salary != null ? formatMoney(row.salary) : "Not set",
-                    color: "var(--color-salary)",
+                    label: row.extraIncome > 0 ? "Income" : row.salary != null ? "Salary" : "Pay received",
+                    value: row.paid != null ? money(row.paid) : "Not set",
+                    color: "var(--color-paid)",
                   },
-                  { label: "Spent", value: formatMoney(row.spent), color: "var(--color-spent)" },
+                  { label: "Spent", value: money(row.spent), color: "var(--color-spent)" },
                 ]
-                if (row.savingsGoal != null) {
-                  rowsOut.push({ label: "Savings goal", value: formatMoney(row.savingsGoal) })
+                if (row.extraIncome > 0) {
+                  rowsOut.push({ label: "Of which extra", value: money(row.extraIncome) })
                 }
-                if (row.salary != null) {
-                  rowsOut.push({ label: "Saved", value: formatMoney(row.salary - row.spent) })
+                if (row.savingsGoal != null) {
+                  rowsOut.push({ label: "Savings goal", value: money(row.savingsGoal) })
+                }
+                if (row.paid != null) {
+                  rowsOut.push({ label: "Saved", value: money(row.paid - row.spent) })
                 }
                 return <TooltipBox title={formatMonth(row.month)} rows={rowsOut} />
               }}
             />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="salary" fill="var(--color-salary)" radius={[4, 4, 0, 0]} maxBarSize={24} />
+            <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} maxBarSize={24} />
             <Bar dataKey="spent" fill="var(--color-spent)" radius={[4, 4, 0, 0]} maxBarSize={24} />
           </BarChart>
         </ChartContainer>

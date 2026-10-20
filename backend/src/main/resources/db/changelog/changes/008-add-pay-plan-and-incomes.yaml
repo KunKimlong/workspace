@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-add-pay-plan
+      author: admin-backend
+      comment: Budget until the next pay instead of by calendar month - for pay that has no fixed day
+      changes:
+        - addColumn:
+            tableName: user_balances
+            columns:
+              - column:
+                  name: next_pay_date
+                  type: date
+                  remarks: When the user expects money next; null = no pay plan
+              - column:
+                  name: keep_amount
+                  type: decimal(14, 2)
+                  remarks: Money to leave untouched until then; null = none
+  - changeSet:
+      id: 008-create-incomes
+      author: admin-backend
+      comment: Pay the user received; each one is added to the balance
+      changes:
+        - createTable:
+            tableName: incomes
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_incomes
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_incomes_user
+                    references: app_users(id)
+                    deleteCascade: true
+              - column:
+                  name: received_on
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: decimal(14, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: note
+                  type: varchar(100)
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: incomes
+            indexName: idx_incomes_user_received
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: received_on

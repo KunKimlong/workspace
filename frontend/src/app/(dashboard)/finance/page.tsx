@@ -12,17 +12,18 @@ import {
   ProgressBar,
   StatCard,
 } from "@/components/finance/finance-ui"
-import { computePlan, dailyLimit } from "@/components/finance/savings-plan-card"
+import { computePlan } from "@/components/finance/savings-plan-card"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatMoney, formatMonth } from "@/lib/format"
+import { todayBudget } from "@/lib/finance-stats"
+import { formatDay, formatMoney, formatMonth } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const RECENT = 6
 
 /** At a glance: four headline numbers, the daily trend and the latest expenses. */
 export default function FinanceOverviewPage() {
-  const { month, summary, expenses, stats, loading, openExpense, openSalary } = useFinance()
+  const { month, summary, expenses, stats, loading, openExpense, openBalance, openPayPlan, openIncome } = useFinance()
 
   const header = <FinancePageHeader title="Overview" description="Where your money stands this month." />
   if (!summary || !stats || !expenses) {
@@ -35,15 +36,12 @@ export default function FinanceOverviewPage() {
   }
 
   const plan = computePlan(stats)
-  const budget = stats.salary != null ? stats.salary - (stats.goal ?? 0) : null
+  const budget = stats.spendingBudget
   // Money left: the full picture if a balance is set, otherwise what's left of the salary
   const moneyLeft = stats.remainingBalance ?? stats.remainingSalary
-  // What can still be spent per day: from the savings plan if there is one, else the remaining salary spread out
-  const perDay =
-    plan?.perDay ??
-    (stats.remainingSalary != null && stats.daysLeft > 0
-      ? dailyLimit(stats.remainingSalary, stats.todaySpent, stats.daysLeft)
-      : null)
+  // What can still be spent per day: until the next pay if there's a pay plan, else from the month
+  const today = todayBudget(stats, plan)
+  const perDay = today && today.mode !== "pay-due" ? today.perDay : null
 
   return (
     <>
@@ -53,12 +51,13 @@ export default function FinanceOverviewPage() {
           <StatCard
             title="Money left"
             value={moneyLeft != null ? formatMoney(moneyLeft) : "—"}
+            sensitive={moneyLeft != null}
             icon={LuCoins}
             accent="balance"
             tone={moneyLeft != null && moneyLeft < 0 ? "negative" : undefined}
             hint={
               stats.remainingBalance != null
-                ? "Balance + remaining salary"
+                ? "Balance minus spending, plus income, since you entered it"
                 : stats.remainingSalary != null
                   ? "Remaining salary · set a balance in Budget for the full picture"
                   : "Set your salary or balance in Budget"
@@ -68,11 +67,12 @@ export default function FinanceOverviewPage() {
           <StatCard
             title="Spent this month"
             value={formatMoney(stats.spent)}
+            sensitive
             icon={LuReceipt}
             accent="spent"
             hint={
               budget != null && budget > 0
-                ? `${Math.round((stats.spent / budget) * 100)}% of your ${formatMoney(budget)} budget`
+                ? `${Math.round((stats.spent / budget) * 100)}% of your budget`
                 : `${summary.expenseCount} expense${summary.expenseCount === 1 ? "" : "s"}`
             }
           >
@@ -89,10 +89,17 @@ export default function FinanceOverviewPage() {
             <StatCard
               title="Saved"
               value={stats.remainingSalary != null ? formatMoney(stats.remainingSalary) : "—"}
+              sensitive={stats.remainingSalary != null}
               icon={LuGauge}
               accent="remaining"
               tone={stats.remainingSalary != null && stats.remainingSalary < 0 ? "negative" : undefined}
-              hint={stats.goal != null ? `Goal was ${formatMoney(stats.goal)}` : "Salary minus spending"}
+              hint={
+                stats.goal == null || stats.remainingSalary == null
+                  ? "Salary minus spending"
+                  : stats.remainingSalary >= stats.goal
+                    ? "Savings goal reached"
+                    : "Savings goal missed"
+              }
             />
           ) : (
             <StatCard
@@ -102,17 +109,27 @@ export default function FinanceOverviewPage() {
               icon={LuGauge}
               accent="remaining"
               hint={
-                perDay == null
-                  ? "Set your salary to get a daily limit"
-                  : stats.goal != null
-                    ? `For ${stats.daysLeft} days, still saving ${formatMoney(stats.goal)}`
-                    : `For the ${stats.daysLeft} days left`
+                today?.mode === "pay"
+                  ? `For ${today.daysLeft} day${today.daysLeft === 1 ? "" : "s"} until your next pay on ${formatDay(today.nextPayDate)}`
+                  : today?.mode === "pay-due"
+                    ? `Your pay was expected ${formatDay(today.nextPayDate)} - add it or move the date`
+                    : perDay == null
+                      ? "Add your balance and next pay date, or a monthly salary"
+                      : stats.goal != null
+                        ? `For ${stats.daysLeft} days, still reaching your savings goal`
+                        : `For the ${stats.daysLeft} days left`
               }
             >
-              {perDay == null && (
-                <Button variant="outline" size="sm" className="w-fit" onClick={openSalary}>
-                  Set salary
+              {today?.mode === "pay-due" ? (
+                <Button variant="outline" size="sm" className="w-fit" onClick={openIncome}>
+                  Got paid
                 </Button>
+              ) : (
+                perDay == null && (
+                  <Button variant="outline" size="sm" className="w-fit" onClick={stats.balance ? openPayPlan : openBalance}>
+                    {stats.balance ? "Set next pay" : "Set balance"}
+                  </Button>
+                )
               )}
             </StatCard>
           )}
@@ -120,13 +137,15 @@ export default function FinanceOverviewPage() {
           <StatCard
             title={stats.isCurrent ? "Spent today" : "Average per day"}
             value={formatMoney(stats.isCurrent ? stats.todaySpent! : stats.avgPerDay)}
+            // Today's spending always shows; another month's average gives away its total
+            sensitive={!stats.isCurrent}
             icon={LuCalendarDays}
             tone={stats.isCurrent && perDay != null && stats.todaySpent! > perDay ? "negative" : undefined}
             hint={
               stats.isCurrent
                 ? [
                     perDay != null ? `Daily limit ${formatMoney(perDay)}` : `Average ${formatMoney(stats.avgPerDay)} / day`,
-                    stats.todaySpecial > 0 && `+ ${formatMoney(stats.todaySpecial)} special, spread over the month`,
+                    stats.todaySpecial > 0 && `+ ${formatMoney(stats.todaySpecial)} special, spread over the days left`,
                   ]
                     .filter(Boolean)
                     .join(" · ")

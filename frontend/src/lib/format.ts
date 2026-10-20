@@ -29,6 +29,17 @@ export function parseLocalDate(value: string) {
   return new Date(y, m - 1, d)
 }
 
+/** Whole days from one "yyyy-MM-dd" to another (negative if `to` is earlier). */
+export const daysBetween = (from: string, to: string) =>
+  Math.round((parseLocalDate(to).getTime() - parseLocalDate(from).getTime()) / 86_400_000)
+
+/** "yyyy-MM-dd" plus `days`. */
+export function addDays(date: string, days: number) {
+  const d = parseLocalDate(date)
+  d.setDate(d.getDate() + days)
+  return toISODate(d)
+}
+
 export function shiftMonth(month: string, delta: number) {
   const d = parseLocalDate(month)
   d.setMonth(d.getMonth() + delta)

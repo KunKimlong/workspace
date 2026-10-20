@@ -19,3 +19,12 @@ databaseChangeLog:
   - include:
       file: changes/006-create-user-balances.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/007-add-refresh-token-rotated.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/008-add-pay-plan-and-incomes.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/009-add-income-kind.yaml
+      relativeToChangelogFile: true

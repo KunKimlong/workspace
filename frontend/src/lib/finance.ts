@@ -18,14 +18,26 @@ export interface FinanceSummary {
   expenseCount: number
   /** One entry per day of the month, including days with nothing spent. */
   daily: { date: string; total: number; count: number }[]
-  /** The 6 months ending at `month`, oldest first. */
-  history: { month: string; salary: number | null; savingsGoal: number | null; spent: number }[]
+  /**
+   * The 6 months ending at `month`, oldest first. `income` is pay recorded as received that month,
+   * `extraIncome` the other money that came in.
+   */
+  history: {
+    month: string
+    salary: number | null
+    savingsGoal: number | null
+    spent: number
+    income: number
+    extraIncome: number
+  }[]
   /** Special spending planned for the month (fuel, soap, a bill...). */
   planned: PlannedExpense[]
   /** Items used in any month before, newest first, with the latest amount - so it needn't be remembered. */
   plannedSuggestions: PlannedSuggestion[]
   /** Not tied to the month: the money the user has, or null if never entered. */
   balance: Balance | null
+  /** Pay and extra income received in the month, newest first. */
+  incomes: Income[]
 }
 
 export interface Balance {
@@ -35,8 +47,31 @@ export interface Balance {
   setAt: string
   /** Expenses added since then (dated that day or later). */
   spentSince: number
+  /** Extra income added since then (dated that day or later). */
+  earnedSince: number
+  /** amount - spentSince + earnedSince */
   remaining: number
+  /** Pay plan: when the next pay is expected (yyyy-MM-dd), or null for no plan. */
+  nextPayDate: string | null
+  /** Pay plan: money to leave untouched until then. */
+  keepAmount: number | null
 }
+
+export interface Income {
+  id: number
+  /** PAY: "Got paid", which enters the balance again. EXTRA: money in on a day, added on top. */
+  kind: "PAY" | "EXTRA"
+  receivedOn: string // yyyy-MM-dd
+  amount: number
+  note: string | null
+}
+
+export type IncomeInput = { receivedOn: string; amount: number; note?: string; nextPayDate: string }
+
+export type ExtraIncomeInput = { receivedOn: string; amount: number; note?: string }
+
+export const extraIncomeTotal = (items: Income[]) =>
+  items.reduce((sum, i) => (i.kind === "EXTRA" ? sum + i.amount : sum), 0)
 
 export interface PlannedSuggestion {
   name: string
@@ -73,6 +108,16 @@ export const financeApi = {
 
   setBalance: (amount: number) => request<Balance>("/finance/balance", json("PUT", { amount })),
   clearBalance: () => request<void>("/finance/balance", { method: "DELETE" }),
+
+  setPayPlan: (nextPayDate: string, keepAmount: number | null) =>
+    request<Balance>("/finance/pay-plan", json("PUT", { nextPayDate, keepAmount })),
+  clearPayPlan: () => request<void>("/finance/pay-plan", { method: "DELETE" }),
+  /** Adds the pay to the balance and moves the plan on to the next expected pay. */
+  recordIncome: (data: IncomeInput) => request<Income>("/finance/income", json("POST", data)),
+  /** Money in on a day: counts on top of the balance and the month's salary; the pay plan stays. */
+  addExtraIncome: (data: ExtraIncomeInput) => request<Income>("/finance/income/extra", json("POST", data)),
+  /** Only today's extra income can be deleted. */
+  deleteIncome: (id: number) => request<void>(`/finance/income/${id}`, { method: "DELETE" }),
 
   expenses: (month: string) => request<Expense[]>(`/finance/expenses?month=${month}`),
   addExpense: (data: ExpenseInput) => request<Expense>("/finance/expenses", json("POST", data)),

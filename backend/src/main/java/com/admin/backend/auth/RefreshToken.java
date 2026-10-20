@@ -27,6 +27,10 @@ public class RefreshToken {
 
     private Instant revokedAt;
 
+    /** Revoked because a new token replaced it - the only kind of revocation the reuse grace window forgives. */
+    @Column(nullable = false)
+    private boolean rotated;
+
     protected RefreshToken() {
     }
 
@@ -41,5 +45,16 @@ public class RefreshToken {
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getRevokedAt() { return revokedAt; }
     public boolean isRevoked() { return revokedAt != null; }
+    public boolean isRotated() { return rotated; }
+
+    /** Logout or theft: never usable again. */
     public void revoke() { if (revokedAt == null) revokedAt = Instant.now(); }
+
+    /** Replaced by a new token during refresh. */
+    public void rotate() {
+        if (revokedAt == null) {
+            revokedAt = Instant.now();
+            rotated = true;
+        }
+    }
 }

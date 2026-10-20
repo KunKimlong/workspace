@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { LuChevronRight, LuLogOut, LuMenu, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu"
 
 import { useAuth } from "@/components/auth-provider"
+import { PrivacyToggle } from "@/components/privacy"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -92,6 +93,7 @@ export function Header() {
       )}
 
       <div className="ml-auto flex items-center gap-1">
+        <PrivacyToggle />
         <ThemeToggle />
 
         <DropdownMenu>

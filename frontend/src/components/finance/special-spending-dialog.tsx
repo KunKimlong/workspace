@@ -187,6 +187,8 @@ export function SpecialSpendingDialog({
                   setDate(value)
                   setErrors((x) => ({ ...x, date: undefined }))
                 }}
+                // Same rule as expenses: an item being edited stays on today
+                min={item ? todayISO() : undefined}
                 max={todayISO()}
                 invalid={!!errors.date}
               />

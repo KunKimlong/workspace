@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-refresh-token-rotated
+      author: admin-backend
+      comment: Tells a token revoked by normal rotation (eligible for the reuse grace window) from one revoked by logout or theft detection
+      changes:
+        - addColumn:
+            tableName: refresh_tokens
+            columns:
+              - column:
+                  name: rotated
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+                  remarks: True when revoked because a new token replaced it

@@ -6,6 +6,7 @@ import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu"
 
 import { useFinance } from "@/components/finance/finance-context"
 import { MonthPicker } from "@/components/finance/month-picker"
+import { Private } from "@/components/privacy"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -72,10 +73,13 @@ export function StatCard({
   icon: Icon,
   accent = "neutral",
   tone,
+  sensitive,
   children,
 }: {
   title: string
   value: string
+  /** Blur the value while amounts are hidden. */
+  sensitive?: boolean
   /** Small unit after the value, e.g. "/ day". */
   suffix?: string
   hint?: React.ReactNode
@@ -96,8 +100,8 @@ export function StatCard({
             tone === "negative" && "text-destructive"
           )}
         >
-          {value}
-          {suffix && <span className="ml-1 text-sm font-semibold text-muted-foreground">{suffix}</span>}
+          {sensitive ? <Private>{value}</Private> : value}
+          {suffix &&<span className="ml-1 text-sm font-semibold text-muted-foreground">{suffix}</span>}
         </CardTitle>
         <CardAction>
           <span className={cn("flex size-10 items-center justify-center rounded-xl", ACCENTS[accent])}>

@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-add-income-kind
+      author: admin-backend
+      comment: Tell pay (moves the pay plan on) apart from extra income on any day (tips, side work...)
+      changes:
+        - addColumn:
+            tableName: incomes
+            columns:
+              - column:
+                  name: kind
+                  type: varchar(10)
+                  defaultValue: PAY
+                  remarks: PAY = "Got paid" (resets the balance); EXTRA = money in on a day, added on top
+                  constraints:
+                    nullable: false

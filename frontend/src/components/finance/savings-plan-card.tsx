@@ -11,8 +11,10 @@ import {
   LuTriangleAlert,
 } from "react-icons/lu"
 
+import { Private } from "@/components/privacy"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { dailyLimit } from "@/lib/finance-stats"
 import { formatMoney } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -48,18 +50,11 @@ export interface SavingsPlanInput {
   timing: Timing
   /** Special (one-off) spending this month; already part of `spent`. */
   specialSpent: number
+  /** Money in on top of the salary this month (tips, side work...). */
+  extraIncome?: number
 }
 
-/**
- * Even share per day of what's left, with today's everyday spending added back so the limit doesn't
- * shrink as you spend today (that spending is measured against it instead). Special spending is not
- * added back, so a one-off cost is spread over all the days left, today included. `daysLeft` includes today.
- */
-export function dailyLimit(left: number, todayEverydaySpent: number | null, daysLeft: number) {
-  return Math.max(left + (todayEverydaySpent ?? 0), 0) / Math.max(daysLeft, 1)
-}
-
-/** All the numbers the card shows, derived from salary, goal and spending so far. */
+/** All the numbers the card shows, derived from salary, extra income, goal and spending so far. */
 export function computePlan({
   salary,
   goal,
@@ -70,9 +65,11 @@ export function computePlan({
   timing,
   specialSpent,
   todaySpent,
+  extraIncome = 0,
 }: SavingsPlanInput) {
   if (salary == null || goal == null) return null
-  const budget = salary - goal // what can be spent this month while still saving the goal
+  const income = salary + extraIncome
+  const budget = income - goal // what can be spent this month while still saving the goal
   const leftToSpend = budget - spent
   const perDay = timing === "past" ? null : dailyLimit(leftToSpend, todaySpent, daysLeft)
 
@@ -82,10 +79,10 @@ export function computePlan({
     const everydayPerDay = Math.max(spent - specialSpent, 0) / daysElapsed
     projectedSpend = spent + everydayPerDay * (totalDays - daysElapsed)
   }
-  const projectedSavings = salary - projectedSpend
+  const projectedSavings = income - projectedSpend
 
   let status: Status
-  if (timing === "past") status = salary - spent >= goal ? "reached" : "missed"
+  if (timing === "past") status = income - spent >= goal ? "reached" : "missed"
   else if (leftToSpend < 0) status = "over"
   else if (timing === "future") status = "planned"
   else status = projectedSavings < goal ? "at-risk" : "on-track"
@@ -104,7 +101,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "ne
           tone === "positive" && "text-success"
         )}
       >
-        {value}
+        <Private>{value}</Private>
       </p>
     </div>
   )
@@ -112,7 +109,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "ne
 
 export function SavingsPlanCard({ input, onEdit }: { input: SavingsPlanInput; onEdit: () => void }) {
   const plan = computePlan(input)
-  const { salary, goal, spent, todaySpent, todaySpecial = 0, daysLeft, timing, specialSpent } = input
+  const { salary, goal, spent, todaySpent, todaySpecial = 0, daysLeft, timing, specialSpent, extraIncome = 0 } = input
 
   if (!plan) {
     return (
@@ -167,8 +164,9 @@ export function SavingsPlanCard({ input, onEdit }: { input: SavingsPlanInput; on
           {timing === "past" ? (
             <div>
               <p className="text-sm text-muted-foreground">You saved</p>
-              <p className="text-4xl font-bold tracking-tight tabular-nums">{formatMoney(salary! - spent)}</p>
-              <p className="mt-1 text-sm text-muted-foreground">against a goal of {formatMoney(goal!)}.</p>
+              <p className="text-4xl font-bold tracking-tight tabular-nums">
+                <Private>{formatMoney(salary! + extraIncome - spent)}</Private>
+              </p>
             </div>
           ) : (
             <div>
@@ -179,8 +177,8 @@ export function SavingsPlanCard({ input, onEdit }: { input: SavingsPlanInput; on
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {plan.leftToSpend < 0
-                  ? `You're ${formatMoney(-plan.leftToSpend)} past this month's spending budget, so the ${formatMoney(goal!)} goal is out of reach.`
-                  : `for the ${daysLeft === 1 ? "last day" : `next ${daysLeft} days`} and still save ${formatMoney(goal!)}.`}
+                  ? "You're past this month's spending budget, so the savings goal is out of reach."
+                  : `for the ${daysLeft === 1 ? "last day" : `next ${daysLeft} days`} and still reach your savings goal.`}
               </p>
             </div>
           )}
@@ -212,7 +210,7 @@ export function SavingsPlanCard({ input, onEdit }: { input: SavingsPlanInput; on
             <div>
               <p className="text-sm font-medium">Spending budget</p>
               <p className="text-xs text-muted-foreground">
-                Salary {formatMoney(salary!)} − savings goal {formatMoney(goal!)}
+                {extraIncome > 0 ? "Salary plus other income, minus savings goal" : "Salary minus savings goal"}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={onEdit}>
@@ -237,12 +235,9 @@ export function SavingsPlanCard({ input, onEdit }: { input: SavingsPlanInput; on
                 style={{ width: `${Math.min(plan.usedPct, 1) * 100}%` }}
               />
             </div>
-            <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
-              <span>
-                {formatMoney(spent)} spent ({Math.round(plan.usedPct * 100)}%)
-              </span>
-              <span>{formatMoney(plan.budget)} budget</span>
-            </div>
+            <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+              {Math.round(plan.usedPct * 100)}% of the budget used
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

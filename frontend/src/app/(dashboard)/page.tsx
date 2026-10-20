@@ -4,9 +4,12 @@ import Link from "next/link"
 import type { IconType } from "react-icons"
 import {
   LuArrowRight,
+  LuBanknote,
+  LuCalendarClock,
   LuCircleAlert,
   LuCircleCheck,
   LuCoins,
+  LuHandCoins,
   LuLandmark,
   LuPiggyBank,
   LuPlus,
@@ -19,10 +22,11 @@ import {
 import { useAuth } from "@/components/auth-provider"
 import { FinanceProvider, useFinance, type FinanceStats } from "@/components/finance/finance-context"
 import { ExpensesTable, FinancePageSkeleton, ProgressBar, StatCard } from "@/components/finance/finance-ui"
-import { computePlan, dailyLimit } from "@/components/finance/savings-plan-card"
+import { computePlan } from "@/components/finance/savings-plan-card"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatMoney, formatMonth } from "@/lib/format"
+import { todayBudget, type TodayBudget } from "@/lib/finance-stats"
+import { formatDay, formatMoney, formatMonth } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 function greeting(hour: number) {
@@ -60,45 +64,42 @@ function DashboardContent() {
   if (!summary || !stats || !expenses) return <FinancePageSkeleton cards={3} />
 
   const plan = computePlan(stats)
-  // Daily limit: from the savings plan if there is one, else the remaining salary spread over the days left
-  const perDay =
-    plan?.perDay ??
-    (stats.remainingSalary != null && stats.daysLeft > 0
-      ? dailyLimit(stats.remainingSalary, stats.todaySpent, stats.daysLeft)
-      : null)
+  const today = todayBudget(stats, plan)
   const moneyLeft = stats.remainingBalance ?? stats.remainingSalary
-  const budget = stats.salary != null ? stats.salary - (stats.goal ?? 0) : null
+  const budget = stats.spendingBudget
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 lg:grid-cols-5">
-        <TodayCard stats={stats} perDay={perDay} />
-        <AttentionCard stats={stats} perDay={perDay} plan={plan} />
+        <TodayCard stats={stats} budget={today} />
+        <AttentionCard stats={stats} budget={today} plan={plan} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           title="Money left"
           value={moneyLeft != null ? formatMoney(moneyLeft) : "—"}
+          sensitive={moneyLeft != null}
           icon={LuCoins}
           accent="balance"
           tone={moneyLeft != null && moneyLeft < 0 ? "negative" : undefined}
           hint={
             stats.remainingBalance != null
-              ? "Balance + remaining salary"
+              ? "Balance minus spending, plus income, since you entered it"
               : stats.remainingSalary != null
-                ? "Remaining salary this month"
+                ? "Remaining salary and income this month"
                 : "Set your salary or balance to see this"
           }
         />
         <StatCard
           title={`Spent in ${formatMonth(month, "long").split(" ")[0]}`}
           value={formatMoney(stats.spent)}
+          sensitive
           icon={LuReceipt}
           accent="spent"
           hint={
             budget != null && budget > 0
-              ? `${Math.round((stats.spent / budget) * 100)}% of your ${formatMoney(budget)} budget`
+              ? `${Math.round((stats.spent / budget) * 100)}% of your budget`
               : `${summary.expenseCount} expense${summary.expenseCount === 1 ? "" : "s"}`
           }
         >
@@ -106,14 +107,31 @@ function DashboardContent() {
             <ProgressBar value={(stats.spent / budget) * 100} label="Spending budget used" danger={stats.spent > budget} />
           )}
         </StatCard>
+        {stats.balance?.nextPayDate ? (
+          // Budgeting until the next pay: when that is matters more than a monthly goal
+          <StatCard
+            title="Next pay"
+            value={formatDay(stats.balance.nextPayDate)}
+            icon={LuCalendarClock}
+            accent="remaining"
+            hint={
+              today?.mode === "pay"
+                ? `In ${today.daysLeft} day${today.daysLeft === 1 ? "" : "s"}`
+                : "Expected by now - add it when it comes in"
+            }
+          />
+        ) : (
         <StatCard
           title="Savings goal"
           value={stats.goal != null ? formatMoney(stats.goal) : "Not set"}
+          sensitive={stats.goal != null}
           icon={LuPiggyBank}
           accent="remaining"
           hint={
             plan && stats.goal != null
-              ? `On pace to save ${formatMoney(Math.max(plan.projectedSavings, 0))} this month`
+              ? plan.projectedSavings >= stats.goal
+                ? "On pace to reach it this month"
+                : "Behind it at this pace"
               : "Pick an amount to keep from your salary"
           }
         >
@@ -133,6 +151,7 @@ function DashboardContent() {
             </div>
           )}
         </StatCard>
+        )}
       </div>
 
       <Card>
@@ -158,10 +177,43 @@ function DashboardContent() {
 }
 
 /** The one number that matters day to day: what's still OK to spend today. */
-function TodayCard({ stats, perDay }: { stats: FinanceStats; perDay: number | null }) {
-  const { openExpense, openSalary } = useFinance()
+function TodayCard({ stats, budget }: { stats: FinanceStats; budget: TodayBudget | null }) {
+  const { openExpense, openBalance, openPayPlan, openIncome, openExtraIncome } = useFinance()
   const todaySpent = stats.todaySpent ?? 0
+  const perDay = budget && budget.mode !== "pay-due" ? budget.perDay : null
   const leftToday = perDay != null ? perDay - todaySpent : null
+  const hasBalance = !!stats.balance
+
+  let heading: React.ReactNode
+  if (leftToday != null) {
+    heading = (
+      <p className={cn("mt-1 text-4xl font-bold tracking-tight tabular-nums", leftToday < 0 && "text-destructive")}>
+        {formatMoney(Math.max(leftToday, 0))}
+      </p>
+    )
+  } else if (budget?.mode === "pay-due") {
+    heading = (
+      <>
+        <p className="mt-1 text-2xl font-bold tracking-tight">
+          Your pay was expected {formatDay(budget.nextPayDate)}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Record it when it comes in, or move the date if it&apos;s late.
+        </p>
+      </>
+    )
+  } else {
+    heading = (
+      <>
+        <p className="mt-1 text-2xl font-bold tracking-tight">Get a daily limit</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {hasBalance
+            ? "Tell us when you expect your next pay, and your balance is spread over the days until then."
+            : "Add the money you have now, then when you expect your next pay."}
+        </p>
+      </>
+    )
+  }
 
   return (
     <Card className="lg:col-span-3">
@@ -169,37 +221,40 @@ function TodayCard({ stats, perDay }: { stats: FinanceStats; perDay: number | nu
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-muted-foreground">Left to spend today</p>
-            {leftToday != null ? (
-              <p
-                className={cn(
-                  "mt-1 text-4xl font-bold tracking-tight tabular-nums",
-                  leftToday < 0 && "text-destructive"
-                )}
-              >
-                {formatMoney(Math.max(leftToday, 0))}
-              </p>
-            ) : (
-              <p className="mt-1 text-2xl font-bold tracking-tight">Set your salary to get a daily limit</p>
-            )}
+            {heading}
           </div>
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-brand-text">
             <LuWallet className="size-5" />
           </span>
         </div>
 
-        {perDay != null && (
+        {budget && budget.mode !== "pay-due" && (
           <div className="grid gap-2">
             <ProgressBar
-              value={perDay > 0 ? (todaySpent / perDay) * 100 : 100}
+              value={budget.perDay > 0 ? (todaySpent / budget.perDay) * 100 : 100}
               label="Today's limit used"
-              danger={todaySpent > perDay}
+              danger={todaySpent > budget.perDay}
             />
             <p className="text-sm text-muted-foreground tabular-nums">
               {leftToday! < 0
-                ? `${formatMoney(-leftToday!)} over today's ${formatMoney(perDay)} limit - tomorrow's limit gets smaller to make up for it.`
-                : `${formatMoney(todaySpent)} spent of today's ${formatMoney(perDay)} limit.`}
+                ? `${formatMoney(-leftToday!)} over today's ${formatMoney(budget.perDay)} limit - the next days' limit gets smaller to make up for it.`
+                : `${formatMoney(todaySpent)} spent of today's ${formatMoney(budget.perDay)} limit.`}
               {stats.todaySpecial > 0 &&
-                ` ${formatMoney(stats.todaySpecial)} of special spending today is spread over the rest of the month instead.`}
+                ` ${formatMoney(stats.todaySpecial)} of special spending today is spread over the days left instead.`}
+              {stats.todayEarned > 0 &&
+                ` The ${formatMoney(stats.todayEarned)} that came in today is spread over the days left too.`}
+            </p>
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {budget.mode === "pay"
+                ? `For ${budget.daysLeft} day${budget.daysLeft === 1 ? "" : "s"} until your next pay on ${formatDay(budget.nextPayDate)}.`
+                : `For the ${budget.daysLeft} day${budget.daysLeft === 1 ? "" : "s"} left this month.`}
+              {budget.tomorrow != null && (
+                <>
+                  {" "}
+                  Spend nothing more today and tomorrow&apos;s limit is{" "}
+                  <span className="font-medium text-foreground">{formatMoney(budget.tomorrow)}</span>.
+                </>
+              )}
             </p>
           </div>
         )}
@@ -208,14 +263,22 @@ function TodayCard({ stats, perDay }: { stats: FinanceStats; perDay: number | nu
           <Button onClick={() => openExpense()}>
             <LuPlus /> Add expense
           </Button>
-          {perDay == null ? (
-            <Button variant="outline" onClick={openSalary}>
-              <LuWallet /> Set salary
+          <Button variant="outline" onClick={openExtraIncome}>
+            <LuHandCoins /> Add income
+          </Button>
+          {!hasBalance ? (
+            <Button variant="outline" onClick={openBalance}>
+              <LuLandmark /> Set balance
             </Button>
           ) : (
-            <Link href="/finance/expenses" className={buttonVariants({ variant: "outline" })}>
-              <LuReceipt /> Special spending
-            </Link>
+            <>
+              <Button variant="outline" onClick={openIncome}>
+                <LuBanknote /> Got paid
+              </Button>
+              <Button variant="ghost" onClick={openPayPlan}>
+                <LuCalendarClock /> {stats.balance?.nextPayDate ? "Next pay date" : "Set next pay"}
+              </Button>
+            </>
           )}
         </div>
       </CardContent>
@@ -241,31 +304,41 @@ const TONE = {
 /** What needs doing or watching, most urgent first; a single "all good" line when nothing does. */
 function AttentionCard({
   stats,
-  perDay,
+  budget,
   plan,
 }: {
   stats: FinanceStats
-  perDay: number | null
+  budget: TodayBudget | null
   plan: ReturnType<typeof computePlan>
 }) {
-  const { openSalary, openBalance } = useFinance()
+  const { openSalary, openBalance, openPayPlan, openIncome } = useFinance()
   const notices: Notice[] = []
+  // Budgeting until the next pay replaces the monthly salary, so the salary/goal nudges don't apply
+  const payMode = !!stats.balance?.nextPayDate
+  const perDay = budget && budget.mode !== "pay-due" ? budget.perDay : null
 
-  if (stats.salary == null) {
-    notices.push({ key: "salary", tone: "info", icon: LuWallet, text: "Your salary for this month isn't set.", action: { label: "Set salary", onClick: openSalary } })
+  if (budget?.mode === "pay-due") {
+    notices.push({ key: "pay-due", tone: "warning", icon: LuBanknote, text: `Your pay was expected ${formatDay(budget.nextPayDate)}. Got it? Add it, or move the date.`, action: { label: "Got paid", onClick: openIncome } })
   }
-  if (plan?.status === "over") {
-    notices.push({ key: "over", tone: "danger", icon: LuCircleAlert, text: `You're ${formatMoney(-plan.leftToSpend)} over this month's spending budget.`, action: { label: "Review", href: "/finance/budget" } })
-  } else if (plan?.status === "at-risk") {
-    notices.push({ key: "risk", tone: "warning", icon: LuTriangleAlert, text: `At this pace you'll save ${formatMoney(Math.max(plan.projectedSavings, 0))}, below your ${formatMoney(stats.goal!)} goal.`, action: { label: "See plan", href: "/finance/budget" } })
+  if (!stats.balance && stats.salary == null) {
+    notices.push({ key: "start", tone: "info", icon: LuLandmark, text: "Add the money you have now to get a daily limit.", action: { label: "Set balance", onClick: openBalance } })
+  } else if (stats.balance && !payMode && stats.salary == null) {
+    notices.push({ key: "next-pay", tone: "info", icon: LuCalendarClock, text: "When do you expect your next pay? Your balance is spread over the days until then.", action: { label: "Set next pay", onClick: openPayPlan } })
+  }
+  if (!payMode) {
+    if (plan?.status === "over") {
+      notices.push({ key: "over", tone: "danger", icon: LuCircleAlert, text: "You're over this month's spending budget.", action: { label: "Review", href: "/finance/budget" } })
+    } else if (plan?.status === "at-risk") {
+      notices.push({ key: "risk", tone: "warning", icon: LuTriangleAlert, text: "At this pace you'll save less than your goal.", action: { label: "See plan", href: "/finance/budget" } })
+    }
   }
   if (perDay != null && stats.todaySpent != null && stats.todaySpent > perDay) {
     notices.push({ key: "today", tone: "warning", icon: LuTriangleAlert, text: `Today's spending is over the ${formatMoney(perDay)} daily limit.` })
   }
-  if (stats.salary != null && stats.goal == null) {
+  if (!payMode && stats.salary != null && stats.goal == null) {
     notices.push({ key: "goal", tone: "info", icon: LuTarget, text: "No savings goal yet - set one to get a daily limit that protects it.", action: { label: "Add goal", onClick: openSalary } })
   }
-  if (!stats.balance) {
+  if (!stats.balance && stats.salary != null) {
     notices.push({ key: "balance", tone: "info", icon: LuLandmark, text: "Add your current balance to see all the money you have.", action: { label: "Set balance", onClick: openBalance } })
   }
   if (notices.length === 0) {
@@ -273,7 +346,11 @@ function AttentionCard({
       key: "ok",
       tone: "good",
       icon: LuCircleCheck,
-      text: plan && stats.goal != null ? `All good - you're on track to save ${formatMoney(stats.goal)} this month.` : "All good - nothing needs your attention.",
+      text: payMode
+        ? "All good - you're within your budget until your next pay."
+        : plan && stats.goal != null
+          ? "All good - you're on track for your savings goal this month."
+          : "All good - nothing needs your attention.",
     })
   }
 

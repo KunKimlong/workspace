@@ -26,6 +26,9 @@ server:
   port: ${PORT:1680}
 
 app:
+  # Time zone that decides what "today" is (e.g. Asia/Ho_Chi_Minh); blank = the server's zone.
+  # Keep it the same as the browser's, since the frontend works out "today" on its own too.
+  time-zone: ${TIME_ZONE:}
   cors:
     # Frontend origins allowed to call the API (with credentials)
     allowed-origins:

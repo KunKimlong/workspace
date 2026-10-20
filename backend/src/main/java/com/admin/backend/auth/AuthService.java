@@ -63,6 +63,10 @@ public class AuthService {
     public AuthResult refresh(String token) {
         RefreshToken stored = findStored(token);
         if (stored.isRevoked()) {
+            if (!stored.isRotated()) {
+                // Logged out, or killed by reuse detection: dead for good, grace window or not
+                throw unauthorized("Refresh token has been revoked");
+            }
             if (stored.getRevokedAt().isAfter(Instant.now().minus(REUSE_GRACE))) {
                 // Rotated moments ago, but the browser never got the new cookie (e.g. the page was
                 // reloaded mid-refresh, or two tabs refreshed together): issue a fresh pair rather
@@ -75,7 +79,7 @@ public class AuthService {
             refreshTokens.revokeAllForUser(stored.getUser(), Instant.now());
             throw unauthorized("Refresh token has been revoked");
         }
-        stored.revoke();
+        stored.rotate();
         refreshTokens.deleteExpired(Instant.now());
         return issueTokens(stored.getUser());
     }

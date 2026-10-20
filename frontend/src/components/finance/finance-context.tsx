@@ -7,59 +7,15 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { BalanceDialog } from "@/components/finance/balance-dialog"
 import { ExpenseDialog } from "@/components/finance/expense-dialog"
+import { ExtraIncomeDialog, IncomeDialog, PayPlanDialog } from "@/components/finance/pay-dialogs"
 import { SalaryDialog } from "@/components/finance/salary-dialog"
 import { Button } from "@/components/ui/button"
 import { useApi } from "@/hooks/use-api"
-import { financeApi, specialTotal, type Expense, type FinanceSummary } from "@/lib/finance"
-import { currentMonth, daysInMonth, formatDay, formatMoney, todayISO } from "@/lib/format"
+import { financeApi, type Expense, type FinanceSummary } from "@/lib/finance"
+import { deriveStats, type FinanceStats } from "@/lib/finance-stats"
+import { currentMonth, formatDay, formatMoney, todayISO } from "@/lib/format"
 
-/** Everything the Finance pages derive from the selected month's data. */
-function deriveStats(summary: FinanceSummary, month: string) {
-  const today = todayISO()
-  const thisMonth = currentMonth()
-  const isCurrent = month === thisMonth
-  const totalDays = daysInMonth(month)
-  // Days that have started so far in the viewed month (all of them for past months, none for future)
-  const daysElapsed = isCurrent ? Number(today.slice(8)) : month < thisMonth ? totalDays : 0
-  const daysLeft = isCurrent ? totalDays - daysElapsed + 1 : month > thisMonth ? totalDays : 0
-
-  const salary = summary.salary
-  const goal = summary.savingsGoal
-  const spent = summary.totalSpent
-  const remainingSalary = salary != null ? salary - spent : null
-  const balance = summary.balance
-  // Today's spending split: special (one-off) items are spread over the rest of the month rather than
-  // counted against today's daily limit, so only everyday spending is measured against it.
-  const todayTotal = isCurrent ? (summary.daily.find((d) => d.date === today)?.total ?? 0) : null
-  const todaySpecial = isCurrent ? specialTotal(summary.planned.filter((p) => p.date === today)) : 0
-  return {
-    today,
-    isCurrent,
-    isFuture: month > thisMonth,
-    timing: (isCurrent ? "current" : month < thisMonth ? "past" : "future") as "current" | "past" | "future",
-    totalDays,
-    daysElapsed,
-    daysLeft,
-    salary,
-    goal,
-    spent,
-    remainingSalary,
-    avgPerDay: daysElapsed > 0 ? spent / daysElapsed : 0,
-    // Even daily spend that still leaves the savings goal (or the whole salary if no goal)
-    dailyBudget: salary != null ? (salary - (goal ?? 0)) / totalDays : null,
-    /** Everyday spending today (special items excluded) - what the daily limit is measured against. */
-    todaySpent: todayTotal != null ? Math.max(todayTotal - todaySpecial, 0) : null,
-    /** Special spending dated today. */
-    todaySpecial,
-    specialSpent: specialTotal(summary.planned),
-    balance,
-    // Balance + what's left of this month's salary. Spending is already off the remaining salary, so it
-    // isn't subtracted from the balance again. No salary set counts as 0.
-    remainingBalance: balance ? balance.amount + (salary ?? 0) - spent : null,
-  }
-}
-
-export type FinanceStats = ReturnType<typeof deriveStats>
+export type { FinanceStats }
 
 interface FinanceContextValue {
   month: string
@@ -71,6 +27,12 @@ interface FinanceContextValue {
   reload: () => void
   openSalary: () => void
   openBalance: () => void
+  /** When the next pay is expected and how much to keep untouched. */
+  openPayPlan: () => void
+  /** Record pay received. */
+  openIncome: () => void
+  /** Record money in on a day besides the pay. */
+  openExtraIncome: () => void
   /** Pass an expense to edit it, or nothing to add one. */
   openExpense: (expense?: Expense) => void
   deleteExpense: (expense: Expense) => void
@@ -93,6 +55,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const [salaryOpen, setSalaryOpen] = useState(false)
   const [balanceOpen, setBalanceOpen] = useState(false)
+  const [payPlanOpen, setPayPlanOpen] = useState(false)
+  const [incomeOpen, setIncomeOpen] = useState(false)
+  const [extraIncomeOpen, setExtraIncomeOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [deleting, setDeleting] = useState<Expense | null>(null)
@@ -126,6 +91,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     reload,
     openSalary: () => setSalaryOpen(true),
     openBalance: () => setBalanceOpen(true),
+    openPayPlan: () => setPayPlanOpen(true),
+    openIncome: () => setIncomeOpen(true),
+    openExtraIncome: () => setExtraIncomeOpen(true),
     openExpense: (expense) => {
       setEditing(expense ?? null)
       setExpenseOpen(true)
@@ -161,6 +129,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         balance={summary?.balance ?? null}
         onSaved={reload}
       />
+      <PayPlanDialog
+        open={payPlanOpen}
+        onOpenChange={setPayPlanOpen}
+        balance={summary?.balance ?? null}
+        onSaved={reload}
+      />
+      <IncomeDialog
+        open={incomeOpen}
+        onOpenChange={setIncomeOpen}
+        balance={summary?.balance ?? null}
+        onSaved={reload}
+      />
+      <ExtraIncomeDialog open={extraIncomeOpen} onOpenChange={setExtraIncomeOpen} onSaved={reload} />
       <ExpenseDialog
         open={expenseOpen}
         onOpenChange={setExpenseOpen}

@@ -1,5 +1,6 @@
 package com.admin.backend.finance;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 
@@ -22,16 +23,18 @@ public class SpecialSpendingRepair implements ApplicationRunner {
 
     private final PlannedExpenseRepository planned;
     private final ExpenseRepository expenses;
+    private final Clock clock;
 
-    public SpecialSpendingRepair(PlannedExpenseRepository planned, ExpenseRepository expenses) {
+    public SpecialSpendingRepair(PlannedExpenseRepository planned, ExpenseRepository expenses, Clock clock) {
         this.planned = planned;
         this.expenses = expenses;
+        this.clock = clock;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         int fixed = 0;
         for (PlannedExpense p : planned.findByExpenseIsNull()) {
             YearMonth month = YearMonth.parse(p.getMonth());

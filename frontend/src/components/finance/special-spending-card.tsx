@@ -32,8 +32,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { financeApi, specialTotal, type PlannedExpense, type PlannedSuggestion } from "@/lib/finance"
-import { currentMonth, formatDay, formatMoney, formatMonth } from "@/lib/format"
+import { financeApi, type PlannedExpense, type PlannedSuggestion } from "@/lib/finance"
+import { currentMonth, formatDay, formatMoney, formatMonth, todayISO } from "@/lib/format"
 
 // First matching keyword picks the icon; anything else gets a receipt
 const ICONS: [RegExp, IconType][] = [
@@ -74,9 +74,10 @@ export function SpecialSpendingCard({
   const [defaultName, setDefaultName] = useState<string | undefined>()
   const [deleting, setDeleting] = useState<PlannedExpense | null>(null)
 
-  const total = specialTotal(items)
-  // Previous months are locked: their special items can't be edited or deleted (the backend enforces it too)
-  const isPastMonth = month < currentMonth()
+  // Like expenses, items from past days are locked (the backend enforces it too); an item that lost its
+  // expense has no date, so its month decides
+  const today = todayISO()
+  const isLocked = (item: PlannedExpense) => (item.date ? item.date < today : month < currentMonth())
   const sorted = [...items].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || b.id - a.id)
   // Quick add: everything used before (with its last amount), then common items not used yet
   const chips: { name: string; amount?: number }[] = [
@@ -165,14 +166,14 @@ export function SpecialSpendingCard({
         ) : (
           <div className="grid gap-3">
             <p className="text-sm">
-              <strong className="font-semibold tabular-nums">{formatMoney(total)}</strong>{" "}
               <span className="text-muted-foreground">
-                on {items.length} special item{items.length === 1 ? "" : "s"} in {formatMonth(month)}
+                {items.length} special item{items.length === 1 ? "" : "s"} in {formatMonth(month)}
               </span>
             </p>
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-3">
               {sorted.map((item) => {
                 const Icon = iconFor(item.name)
+                const locked = isLocked(item)
                 return (
                   <li key={item.id} className="flex items-center gap-3 rounded-xl border p-4">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-chart-2/12 text-chart-2">
@@ -189,11 +190,9 @@ export function SpecialSpendingCard({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={
-                          isPastMonth ? `${item.name} is from a previous month and can't be edited` : `Edit ${item.name}`
-                        }
-                        title={isPastMonth ? "Special spending from previous months is locked" : undefined}
-                        disabled={isPastMonth}
+                        aria-label={locked ? `${item.name} is from a past day and can't be edited` : `Edit ${item.name}`}
+                        title={locked ? "Special spending from past days is locked" : undefined}
+                        disabled={locked}
                         onClick={() => openEdit(item)}
                       >
                         <LuPencil />
@@ -202,11 +201,9 @@ export function SpecialSpendingCard({
                         variant="ghost"
                         size="icon-sm"
                         className="text-muted-foreground hover:text-destructive"
-                        aria-label={
-                          isPastMonth ? `${item.name} is from a previous month and can't be deleted` : `Delete ${item.name}`
-                        }
-                        title={isPastMonth ? "Special spending from previous months is locked" : undefined}
-                        disabled={isPastMonth}
+                        aria-label={locked ? `${item.name} is from a past day and can't be deleted` : `Delete ${item.name}`}
+                        title={locked ? "Special spending from past days is locked" : undefined}
+                        disabled={locked}
                         onClick={() => setDeleting(item)}
                       >
                         <LuTrash2 />

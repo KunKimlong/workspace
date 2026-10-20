@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.admin.backend.finance.FinanceService.BalanceView;
 import com.admin.backend.finance.FinanceService.ExpenseInput;
 import com.admin.backend.finance.FinanceService.ExpenseView;
+import com.admin.backend.finance.FinanceService.ExtraIncomeInput;
+import com.admin.backend.finance.FinanceService.IncomeInput;
+import com.admin.backend.finance.FinanceService.IncomeView;
 import com.admin.backend.finance.FinanceService.PlannedInput;
 import com.admin.backend.finance.FinanceService.PlannedView;
 import com.admin.backend.finance.FinanceService.SalaryPlan;
@@ -32,7 +35,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 /** Monthly salary and daily expenses for the signed-in user (months are "yyyy-MM"). */
@@ -52,7 +54,8 @@ public class FinanceController {
     }
 
     public record ExpenseRequest(
-            @NotNull(message = "Date is required") @PastOrPresent(message = "Date can't be in the future") LocalDate date,
+            /* "Not in the future" is checked by FinanceService against the app's clock and time zone. */
+            @NotNull(message = "Date is required") LocalDate date,
             @NotNull(message = "Amount is required")
             @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
             @DecimalMax(value = "999999999999.99", message = "Amount is too large")
@@ -73,7 +76,7 @@ public class FinanceController {
             @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
             @Digits(integer = 12, fraction = 2, message = "Amount is too large or has more than 2 decimals")
             BigDecimal amount,
-            @NotNull(message = "Date is required") @PastOrPresent(message = "Date can't be in the future") LocalDate date) {
+            @NotNull(message = "Date is required") LocalDate date) {
 
         PlannedInput toInput() {
             return new PlannedInput(name, amount, date);
@@ -85,6 +88,43 @@ public class FinanceController {
             @DecimalMin(value = "0", message = "Balance cannot be negative")
             @Digits(integer = 12, fraction = 2, message = "Balance is too large or has more than 2 decimals")
             BigDecimal amount) {
+    }
+
+    public record PayPlanRequest(
+            /* Must be after today - checked by FinanceService against the app's clock. */
+            @NotNull(message = "Pick when you expect your next pay") LocalDate nextPayDate,
+            /* Optional; null = keep nothing aside. */
+            @DecimalMin(value = "0", message = "Amount cannot be negative")
+            @Digits(integer = 12, fraction = 2, message = "Amount is too large or has more than 2 decimals")
+            BigDecimal keepAmount) {
+    }
+
+    public record IncomeRequest(
+            @NotNull(message = "Date is required") LocalDate receivedOn,
+            @NotNull(message = "Amount is required")
+            @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
+            @Digits(integer = 12, fraction = 2, message = "Amount is too large or has more than 2 decimals")
+            BigDecimal amount,
+            @Size(max = 100, message = "Note is too long (max 100)") String note,
+            @NotNull(message = "Pick when you expect your next pay") LocalDate nextPayDate) {
+
+        IncomeInput toInput() {
+            return new IncomeInput(receivedOn, amount, note, nextPayDate);
+        }
+    }
+
+    public record ExtraIncomeRequest(
+            /* "Not in the future" is checked by FinanceService against the app's clock and time zone. */
+            @NotNull(message = "Date is required") LocalDate receivedOn,
+            @NotNull(message = "Amount is required")
+            @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
+            @Digits(integer = 12, fraction = 2, message = "Amount is too large or has more than 2 decimals")
+            BigDecimal amount,
+            @Size(max = 100, message = "Note is too long (max 100)") String note) {
+
+        ExtraIncomeInput toInput() {
+            return new ExtraIncomeInput(receivedOn, amount, note);
+        }
     }
 
     private final FinanceService finance;
@@ -119,6 +159,36 @@ public class FinanceController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clearBalance(@AuthenticationPrincipal Jwt jwt) {
         finance.clearBalance(userId(jwt));
+    }
+
+    @PutMapping("/pay-plan")
+    public BalanceView setPayPlan(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PayPlanRequest req) {
+        return finance.setPayPlan(userId(jwt), req.nextPayDate(), req.keepAmount());
+    }
+
+    @DeleteMapping("/pay-plan")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void clearPayPlan(@AuthenticationPrincipal Jwt jwt) {
+        finance.clearPayPlan(userId(jwt));
+    }
+
+    @PostMapping("/income")
+    @ResponseStatus(HttpStatus.CREATED)
+    public IncomeView recordIncome(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody IncomeRequest req) {
+        return finance.recordIncome(userId(jwt), req.toInput());
+    }
+
+    @PostMapping("/income/extra")
+    @ResponseStatus(HttpStatus.CREATED)
+    public IncomeView addExtraIncome(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ExtraIncomeRequest req) {
+        return finance.addExtraIncome(userId(jwt), req.toInput());
+    }
+
+    @DeleteMapping("/income/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteIncome(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        finance.deleteIncome(userId(jwt), id);
     }
 
     @GetMapping("/expenses")
